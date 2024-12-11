@@ -1,0 +1,65 @@
+# C++ objects and libs
+
+*.slo
+*.lo
+*.o
+*.a
+*.la
+*.lai
+*.so
+*.dll
+*.dylib
+
+# Windows resources
+*.rc
+*.ico
+
+# Qt-es
+=======
+
+/.qmake.cache
+/.qmake.stash
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.moc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+Makefile*
+*-build-*
+libmpv-enc
+
+# QtCreator
+
+*.autosave
+
+#QtCtreator Qml
+*.qmlproject.user
+*.qmlproject.user.*
+
+#Python
+*.pyc
+
+# qmake
+/build/
+/release/
+/debug/
+/object_script.*.Debug
+/object_script.*.Release
+/resources/translations/
+
+# release scripts
+*.zip 
+*.sha512
+
+# translations
+*.qm
+qmake_qm_res.qrc
+qmake_qmake_qm_files.qrc
+
+# Appimage
+AppDir
+*.AppImage
