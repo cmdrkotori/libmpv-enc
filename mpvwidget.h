@@ -12,7 +12,6 @@
 #include <mpv/render.h>
 #include <mpv/render_gl.h>
 #include "qthelper.hpp"
-#include "helpers.h"
 
 struct Chapter {
     double time;
@@ -25,27 +24,31 @@ class QThread;
 class QTimer;
 class MpvWidgetInterface;
 class MpvController;
+class MpvEncodeWidget;
 class LogoDrawer;
 
 class MpvObject : public QObject
 {
     Q_OBJECT
-
     typedef std::function<void(MpvObject*,bool,const QVariant&)> PropertyDispatchFunction;
     typedef QMap<QString, PropertyDispatchFunction> PropertyDispatchMap;
 public:
-    explicit MpvObject(QObject *owner, const QString &clientName = "mpv");
+    enum ObjectType { VideoPlaybackType, EncoderType };
+    enum MpvWidgetType { NullWidget, EmbedWidget, GlCbWidget, VulkanCbWidget,
+                         CustomWidget };
+
+    explicit MpvObject(QObject *owner, const QString &clientName = "mpv", ObjectType objectType = VideoPlaybackType);
     ~MpvObject();
 
     void setHostLayout(QLayout *hostLayout);
     void setHostWindow(QMainWindow *hostWindow);
-    void setWidgetType(Helpers::MpvWidgetType widgetType, MpvWidgetInterface *customWidget = nullptr);
+    void setWidgetType(MpvWidgetType widgetType, MpvWidgetInterface *customWidget = nullptr);
 
     QString mpvVersion();
     MpvController *controller();
     QWidget *mpvWidget();
 
-    QList<AudioDevice> audioDevices();
+    //QList<AudioDevice> audioDevices();
     QStringList supportedProtocols();
 
     void showMessage(QString message);
@@ -60,7 +63,7 @@ public:
     void stepBackward();
     void stepForward();
     void seek(double amount, bool exact);
-    void screenshot(const QString &fileName, Helpers::ScreenshotRender render);
+    //void screenshot(const QString &fileName, Helpers::ScreenshotRender render);
     void setMouseHideTime(int msec);
     void setLogoUrl(const QString &filename);
     void setLogoBackground(const QColor &color);
@@ -71,6 +74,7 @@ public:
     void setVideoAspect(double aspectDiff);
     void setVideoAspectPreset(double aspect);
     void disableVideoAspect(bool yes);
+    void setPanScan(double panScan);
 
     int64_t chapter();
     bool setChapter(int64_t chapter);
@@ -110,7 +114,7 @@ signals:
     void ctrlSetLogLevel(QString level);
     void ctrlShowStats(int page);
 
-    void audioDeviceList(const QList<AudioDevice> audioDevices);
+    //void audioDeviceList(const QList<AudioDevice> audioDevices);
 
     void playTimeChanged(double time);
     void playLengthChanged(double length);
@@ -180,7 +184,7 @@ private slots:
 private:
     static PropertyDispatchMap propertyDispatch;
 
-    Helpers::MpvWidgetType widgetType = Helpers::NullWidget;
+    MpvWidgetType widgetType = NullWidget;
     QLayout *hostLayout = nullptr;
     QMainWindow *hostWindow = nullptr;
     MpvController *ctrl = nullptr;
@@ -222,6 +226,7 @@ protected:
     MpvController *ctrl = nullptr;
 };
 Q_DECLARE_INTERFACE(MpvWidgetInterface, "cmdrkotori.mpc-qt.MpvWidgetInterface/1.0");
+
 
 
 class MpvGlWidget : public QOpenGLWidget, public MpvWidgetInterface
@@ -402,5 +407,34 @@ private:
 
     int shownStatsPage = 0;
 };
+
+
+class MpvEncoderObject : public MpvObject
+{
+public:
+    explicit MpvEncoderObject(QObject *owner);
+    void setStart(double time);
+    void setEnd(double time);
+
+private:
+    MpvEncodeWidget *encodeWidget;
+};
+
+
+class MpvEncodeWidget : public QWidget, public MpvWidgetInterface
+{
+    Q_OBJECT
+    Q_INTERFACES(MpvWidgetInterface)
+
+public:
+    explicit MpvEncodeWidget(MpvObject *object, QWidget *parent = nullptr);
+
+    QWidget *self();
+    void initMpv();
+    void setLogoUrl(const QString &filename);
+    void setLogoBackground(const QColor &color);
+    void setDrawLogo(bool yes);
+};
+
 
 #endif // MPVWIDGET_H

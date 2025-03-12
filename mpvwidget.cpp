@@ -15,10 +15,7 @@
 #include <QWindow>
 #include <cmath>
 #include <stdexcept>
-#include "logger.h"
 #include "mpvwidget.h"
-#include "widgets/logowidget.h"
-#include "storage.h"
 
 #ifndef Q_PROCESSOR_ARM
     #ifndef GLAPIENTRY
@@ -70,7 +67,7 @@ MpvObject::PropertyDispatchMap MpvObject::propertyDispatch = {
     HANDLE_PROP("sub-text", subTextChanged, toString, QString())
 };
 
-MpvObject::MpvObject(QObject *owner, const QString &clientName) : QObject(owner)
+MpvObject::MpvObject(QObject *owner, const QString &clientName, ObjectType objectType) : QObject(owner)
 {
     // Setup threads
     worker = new QThread();
@@ -121,7 +118,7 @@ MpvObject::MpvObject(QObject *owner, const QString &clientName) : QObject(owner)
             this, &MpvObject::self_keyRelease);
     connect(hideTimer, &QTimer::timeout,
             this, &MpvObject::hideTimer_timeout);
-
+/*
     // Wire up the logging interface
     connect(ctrl, &MpvController::logMessageByParts,
             Logger::singleton(), &Logger::makeLogDescriptively);
@@ -132,15 +129,25 @@ MpvObject::MpvObject(QObject *owner, const QString &clientName) : QObject(owner)
     QStringList scripts;
     for (auto &info : scriptInfoList)
         scripts.append(info.absoluteFilePath());
-
+*/
     // Initialize mpv playback instance
-    MpvController::OptionList earlyOptions = {
-        { "vo", "libmpv" },
-        { "ytdl", "yes" },
-        { "audio-client-name", clientName },
-        { "load-scripts", true },
-        { "scripts", scripts }
-    };
+    MpvController::OptionList earlyOptions;
+    switch (objectType) {
+    case VideoPlaybackType:
+        earlyOptions = {
+            { "vo", "libmpv" },
+            { "ytdl", "yes" },
+            { "audio-client-name", clientName },
+            /* { "load-scripts", true },
+            { "scripts", scripts } */
+        };
+        break;
+    case EncoderType:
+        earlyOptions = {
+            { "vo", "null" }
+        };
+        break;
+    }
     QMetaObject::invokeMethod(ctrl, "create", Qt::BlockingQueuedConnection,
                               Q_ARG(MpvController::OptionList, earlyOptions));
 
@@ -198,7 +205,7 @@ MpvObject::MpvObject(QObject *owner, const QString &clientName) : QObject(owner)
 
 MpvObject::~MpvObject()
 {
-    Logger::log("mpvwidget", "~MpvObject");
+    /* Logger::log("mpvwidget", "~MpvObject"); */
     if (widget)
         delete widget;
     if (hideTimer) {
@@ -230,7 +237,7 @@ void MpvObject::setHostWindow(QMainWindow *hostWindow)
         this->hostWindow = hostWindow;
 }
 
-void MpvObject::setWidgetType(Helpers::MpvWidgetType widgetType, MpvWidgetInterface *customWidget)
+void MpvObject::setWidgetType(MpvWidgetType widgetType, MpvWidgetInterface *customWidget)
 {
     if (this->widgetType == widgetType)
         return;
@@ -242,22 +249,22 @@ void MpvObject::setWidgetType(Helpers::MpvWidgetType widgetType, MpvWidgetInterf
     }
 
     switch(widgetType) {
-    case Helpers::NullWidget:
+    case NullWidget:
         widget = nullptr;
         break;
-    case Helpers::EmbedWidget:
+    case EmbedWidget:
         widget = new MpvEmbedWidget(this);
         break;
-    case Helpers::GlCbWidget:
+    case GlCbWidget:
         widget = new MpvGlWidget(this);
         break;
-    case Helpers::VulkanCbWidget:
+    case VulkanCbWidget:
         widget = new MpvVulkanCbWidget(this);
         break;
-    case Helpers::CustomWidget:
+    case CustomWidget:
         widget = customWidget;
         if (widget == nullptr)
-            widgetType = Helpers::NullWidget;
+            widgetType = NullWidget;
         break;
     }
     if (!widget)
@@ -286,10 +293,12 @@ QWidget *MpvObject::mpvWidget()
     return widget ? widget->self() : nullptr;
 }
 
+/*
 QList<AudioDevice> MpvObject::audioDevices()
 {
     return AudioDevice::listFromVList(getMpvPropertyVariant("audio-device-list").toList());
 }
+*/
 
 QStringList MpvObject::supportedProtocols()
 {
@@ -365,6 +374,7 @@ void MpvObject::seek(double amount, bool exact)
     emit ctrlCommand(payload);
 }
 
+/*
 void MpvObject::screenshot(const QString &fileName, Helpers::ScreenshotRender render)
 {
     static QMap <Helpers::ScreenshotRender,const char*> methods {
@@ -379,6 +389,7 @@ void MpvObject::screenshot(const QString &fileName, Helpers::ScreenshotRender re
     emit ctrlCommand(QStringList({"screenshot-to-file", fileName,
                                   methods.value(render, "video")}));
 }
+*/
 
 void MpvObject::setMouseHideTime(int msec)
 {
@@ -627,15 +638,19 @@ QVariant MpvObject::getMpvPropertyVariant(QString name)
 
 void MpvObject::setMpvPropertyVariant(QString name, QVariant value)
 {
+    /*
     if (debugMessages)
         LogStream("mpvobject") << name << " property set to " << value;
+    */
     emit ctrlSetPropertyVariant(name, value);
 }
 
 void MpvObject::setMpvOptionVariant(QString name, QVariant value)
 {
+    /*
     if (debugMessages)
         LogStream("mpvobject") << name << " option set to " << value;
+    */
     emit ctrlSetOptionVariant(name, value);
 }
 
@@ -658,7 +673,7 @@ void MpvObject::hideCursor()
         auto window = w->window();
         if (window->isFullScreen() && QCursor::pos().x() == window->geometry().right()) {
             window->setCursor(Qt::BlankCursor);
-            LogStream("glwidget") << "workaround: hiding cursor on rightmost pixels";
+            /* LogStream("glwidget") << "workaround: hiding cursor on rightmost pixels"; */
         }
     }
 }
@@ -677,15 +692,18 @@ void MpvObject::ctrl_mpvPropertyChanged(QString name, QVariant v)
         if (vForLog.toString().section('.', 1) == "000")
             vForLog = vForLog.toString().section('.', 0, 0);
     }
+    /*
     if (debugMessages)
         LogStream("mpvobject") << name << " property changed to " << vForLog;
+    */
 
     bool ok = v.metaType().id() < QMetaType::User
               && v.metaType().id() != QMetaType::UnknownType;
     if (propertyDispatch.contains(name))
         propertyDispatch[name](this, ok, v);
-    else
+    /*else
         LogStream("mpvobject") << name << " property changed, but was not in dispatch list.";
+    */
 }
 
 void MpvObject::ctrl_hookEvent(QString name, uint64_t selfId, uint64_t mpvId)
@@ -705,33 +723,37 @@ void MpvObject::ctrl_unhandledMpvEvent(int eventLevel)
 {
     switch(eventLevel) {
     case MPV_EVENT_START_FILE: {
+        /*
         if (debugMessages)
-            Logger::log("mpvobject", "start file");
+            Logger::log("mpvobject", "start file");*/
         emit playbackLoading();
         break;
     }
     case MPV_EVENT_FILE_LOADED: {
+        /*
         if (debugMessages)
-            Logger::log("mpvobject", "file loaded");
+            Logger::log("mpvobject", "file loaded");*/
         emit playbackStarted();
         break;
     }
     case MPV_EVENT_END_FILE: {
+        /*
         if (debugMessages)
-            Logger::log("mpvobject", "end file");
+            Logger::log("mpvobject", "end file"); */
         emit playbackFinished();
         break;
     }
     // Received when the player has no more files to play and is in an idle state
     case MPV_EVENT_IDLE: {
+        /*
         if (debugMessages)
-            Logger::log("mpvobject", "idling");
+            Logger::log("mpvobject", "idling"); */
         emit playbackIdling();
         break;
     }
     case MPV_EVENT_SHUTDOWN: {
-        if (debugMessages)
-            Logger::log("mpvobject", "event shutdown");
+        /* if (debugMessages)
+            Logger::log("mpvobject", "event shutdown");*/
         emit playbackFinished();
         break;
     }
@@ -771,7 +793,7 @@ void MpvObject::self_metadata(QVariantMap metadata)
 
 void MpvObject::self_audioDeviceList(const QVariantList &list)
 {
-    emit audioDeviceList(AudioDevice::listFromVList(list));
+    /* emit audioDeviceList(AudioDevice::listFromVList(list)); */
 }
 
 void MpvObject::self_mouseMoved(int x, int y)
@@ -878,8 +900,10 @@ static void* GLAPIENTRY glMPGetNativeDisplay(const char* name)
     if (!strcmp(name, "glMPGetNativeDisplay"))
         return reinterpret_cast<void*>(glMPGetNativeDisplay);
     void * res = glctx ? reinterpret_cast<void*>(glctx->getProcAddress(QByteArray(name))) : nullptr;
+    /*
     if (!res)
         LogStream("mpvwidget") << "Looked up OpenGL function " << name << ", but it was not available.";
+    */
     return res;
 }
 
@@ -901,11 +925,11 @@ MpvGlWidget::~MpvGlWidget()
     if (render) {
         ctrl->destroyRenderContext(render);
         render = nullptr;
-    }
+    }/*
     if (logo) {
         delete logo;
         logo = nullptr;
-    }
+    }*/
     doneCurrent();
 }
 
@@ -922,7 +946,7 @@ void MpvGlWidget::initMpv()
 
 void MpvGlWidget::setLogoUrl(const QString &filename)
 {
-    makeCurrent();
+    makeCurrent();/*
     if (!logo) {
         logo = new LogoDrawer(this);
         connect(logo, &LogoDrawer::logoSize,
@@ -931,26 +955,29 @@ void MpvGlWidget::setLogoUrl(const QString &filename)
     logo->setLogoUrl(filename);
     logo->resizeGL(width(), height(), devicePixelRatioF());
     if (drawLogo)
-        update();
+        update();*/
     doneCurrent();
 }
 
 void MpvGlWidget::setLogoBackground(const QColor &color)
 {
-    logo->setLogoBackground(color);
+    /* logo->setLogoBackground(color); */
 }
 
 void MpvGlWidget::setDrawLogo(bool yes)
 {
+    /*
     drawLogo = yes;
     update();
+    */
 }
 
 void MpvGlWidget::initializeGL()
 {
+    /*
     if (!logo)
         logo = new LogoDrawer(this);
-
+*/
 #if MPV_CLIENT_API_VERSION < MPV_MAKE_VERSION(2,0)
     mpv_opengl_init_params glInit { &get_proc_address, this, nullptr };
 #else
@@ -964,24 +991,24 @@ void MpvGlWidget::initializeGL()
     };
     QWidget *nativeParent = nativeParentWidget();
     if (nativeParent == nullptr) {
-        Logger::log("glwidget", "no native parent handle");
+        /* Logger::log("glwidget", "no native parent handle"); */
     }
 #if defined(Q_OS_UNIX) && !defined(Q_OS_DARWIN)
     else if (auto x11App = qApp->nativeInterface<QNativeInterface::QX11Application>()) {
-        Logger::log("glwidget", "assigning x11 display");
+        /* Logger::log("glwidget", "assigning x11 display"); */
         params[2].type = MPV_RENDER_PARAM_X11_DISPLAY;
         params[2].data = x11App->display();
     }
 #if QT_VERSION >= QT_VERSION_CHECK(6,5,0)
     else if (auto wlApp = qApp->nativeInterface<QNativeInterface::QWaylandApplication>()) {
-        Logger::log("glwidget", "assigning wayland display");
+        /* Logger::log("glwidget", "assigning wayland display");*/
         params[2].type = MPV_RENDER_PARAM_WL_DISPLAY;
         params[2].data = wlApp->display();
     }
 #endif // is qt >= 6.5
 #endif // is Linux
     else {
-        Logger::log("glwidget", "unknown display mode (eglfs et al)");
+        /* Logger::log("glwidget", "unknown display mode (eglfs et al)"); */
     }
 
     render = ctrl->createRenderContext(params);
@@ -990,11 +1017,13 @@ void MpvGlWidget::initializeGL()
 
 void MpvGlWidget::paintGL()
 {
+    /*
     if (mpvObject->clientDebuggingMessages())
-        Logger::log("glwidget", "paintGL");
-    if (drawLogo || !render) {
+        Logger::log("glwidget", "paintGL");*/
+    if (/* drawLogo ||*/ !render) {
+        /*
         if (logo)
-            logo->paintGL(this);
+            logo->paintGL(this);*/
         return;
     }
 
@@ -1012,7 +1041,7 @@ void MpvGlWidget::resizeGL(int w, int h)
     qreal r = devicePixelRatioF();
     glWidth = int(w * r);
     glHeight = int(h * r);
-    logo->resizeGL(width(),height(), devicePixelRatioF());
+    /* logo->resizeGL(width(),height(), devicePixelRatioF()); */
 }
 
 void MpvGlWidget::mouseMoveEvent(QMouseEvent *event)
@@ -1231,12 +1260,12 @@ void MpvController::showStatsPage(int page)
     bool statsVisible = (shownStatsPage > 0 && shownStatsPage < 3);
     bool wantVisible = (page > 0 && page < 3);
     if (wantVisible ^ statsVisible) {
-        Logger::log("mpvctrl", "toggling stats page");
+        /* Logger::log("mpvctrl", "toggling stats page"); */
         command(QStringList({"script-binding",
                              "stats/display-stats-toggle"}));
     }
     if (wantVisible) {
-        LogStream("mpvctrl") << "setting page to " << page;
+        /* LogStream("mpvctrl") << "setting page to " << page; */
         QString pageCommand("stats/display-page-%1");
         command(QStringList({"script-binding",
                              pageCommand.arg(QString::number(page))}));
@@ -1466,4 +1495,58 @@ void MpvController::mpvWakeup(void *ctx)
 {
     QMetaObject::invokeMethod(static_cast<MpvController*>(ctx), "parseMpvEvents",
                               Qt::QueuedConnection);
+}
+
+
+
+
+
+MpvEncoderObject::MpvEncoderObject(QObject *owner)
+    : MpvObject(owner, "libmpv_encoder", MpvObject::EncoderType)
+{
+
+    setWidgetType(MpvObject::CustomWidget);
+}
+
+void MpvEncoderObject::setStart(double time)
+{
+    emit ctrlSetOptionVariant("start", time);
+}
+
+void MpvEncoderObject::setEnd(double time)
+{
+    emit ctrlSetOptionVariant("end", time);
+}
+
+
+
+MpvEncodeWidget::MpvEncodeWidget(MpvObject *object, QWidget *parent) :
+    QWidget(parent), MpvWidgetInterface(object)
+{
+
+}
+
+QWidget *MpvEncodeWidget::self()
+{
+    return this;
+}
+
+void MpvEncodeWidget::initMpv()
+{
+
+}
+
+void MpvEncodeWidget::setLogoUrl(const QString &filename)
+{
+    Q_UNUSED(filename)
+}
+
+void MpvEncodeWidget::setLogoBackground(const QColor &color)
+{
+    Q_UNUSED(color)
+}
+
+void MpvEncodeWidget::setDrawLogo(bool yes)
+{
+    Q_UNUSED(yes)
 }
